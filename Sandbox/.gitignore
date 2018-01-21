@@ -1,0 +1,5 @@
+*
+!sandbox.cpp.example
+!sandbox.vcxproj
+!Sandbox.vcxproj.filters
+!.gitignore
