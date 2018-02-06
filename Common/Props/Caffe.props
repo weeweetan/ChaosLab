@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <Toolkits>$(SolutionDir)Common\Toolkits\</Toolkits>
+    <Caffe>$(SolutionDir)Inception\Codes\CaffePlus\caffe\</Caffe>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IncludePath Condition="'$(PlatformTarget)'=='x64'">$(Toolkits)MKL\mkl\include;$(Toolkits)Boost\1.65.1\include;$(Toolkits)Google\protobuf\3.4.1\include;$(Toolkits)Google\glog\0.3.5\include;$(Toolkits)Google\gflags\2.2.1\include;$(Toolkits)Google\leveldb\1.20\include;$(Toolkits)LMDB\0.9.21\include;$(Toolkits)HDF5\1.10.1\include;$(Toolkits)OpenCV\3.3.0\include;$(Toolkits)OpenBlas\0.2.19\include;$(Toolkits)Python\3.6\include;$(Toolkits)Python\3.6\Lib\site-packages\numpy\core\include;$(IncludePath)</IncludePath>
+    <LibraryPath Condition="'$(PlatformTarget)'=='x64'">$(Toolkits)MKL\mkl\lib\intel64_win;$(Toolkits)MKL\compiler\lib\intel64_win;$(Toolkits)Boost\1.65.1\lib;$(Toolkits)Google\protobuf\3.4.1\lib;$(Toolkits)Google\glog\0.3.5\lib;$(Toolkits)Google\gflags\2.2.1\lib;$(Toolkits)Google\leveldb\1.20\lib;$(Toolkits)LMDB\0.9.21\lib;$(Toolkits)HDF5\1.10.1\lib;$(Toolkits)OpenCV\3.3.0\lib;$(Toolkits)OpenBlas\0.2.19\lib;$(Toolkits)Python\3.6\libs\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(Caffe)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(PlatformTarget)'=='Debug|x64'">WITH_PYTHON_LAYER;USE_MKL;USE_LMDB;USE_LEVELDB;USE_OPENCV;MKL_ILP64;BOOST_PYTHON_STATIC_LIB;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;GOOGLE_GLOG_DLL_DECL=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(PlatformTarget)'=='Release|x64'">NDEBUG;WITH_PYTHON_LAYER;USE_MKL;USE_LMDB;USE_LEVELDB;USE_OPENCV;MKL_ILP64;BOOST_PYTHON_STATIC_LIB;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;GOOGLE_GLOG_DLL_DECL=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies Condition="'$(Configuration)|$(PlatformTarget)'=='Debug|x64'">opencv_world330d.lib;mkl_intel_ilp64_dll.lib;mkl_intel_thread_dll.lib;mkl_core_dll.lib;libiomp5md.lib;python36.lib;cuda.lib;cudart.lib;cublas.lib;curand.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)|$(PlatformTarget)'=='Release|x64'">opencv_world330.lib;mkl_intel_ilp64_dll.lib;mkl_intel_thread_dll.lib;mkl_core_dll.lib;libiomp5md.lib;python36.lib;cuda.lib;cudart.lib;cublas.lib;curand.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Lib>
+      <AdditionalDependencies Condition="'$(Configuration)|$(PlatformTarget)'=='Debug|x64'">leveldbd.lib;lmdbd.lib;gflags_staticd.lib;libprotobufd.lib;glogd.lib;libhdf5_D.lib;libhdf5_hl_D.lib;Shlwapi.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)|$(PlatformTarget)'=='Release|x64'">leveldb.lib;lmdb.lib;gflags_static.lib;libprotobuf.lib;glog.lib;libhdf5.lib;libhdf5_hl.lib;Shlwapi.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+    <CudaCompile Condition="'$(PlatformTarget)'=='x64'">
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <CodeGeneration>compute_35,sm_35;compute_50,sm_50;compute_52,sm_52;compute_60,sm_60;compute_61,sm_61;compute_61,compute_61;%(CodeGeneration)</CodeGeneration>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <BuildMacro Include="Toolkits">
+      <Value>$(Toolkits)</Value>
+    </BuildMacro>
+    <BuildMacro Include="Caffe">
+      <Value>$(Caffe)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>
