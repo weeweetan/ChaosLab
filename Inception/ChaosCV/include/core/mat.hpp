@@ -4,9 +4,11 @@
 
 #include <iostream>
 #include <vector>
+#include <map>
 #include <memory>
 #include <numeric>
 #include <iomanip>
+#include <typeindex>
 
 #ifdef USE_OPENCV
 #include <opencv2\opencv.hpp>
@@ -27,7 +29,7 @@ namespace chaos
 
 		bool Inside(const TRect<Type>& rect) const
 		{
-			return rect.tl < *this && *this < rect.br;
+			return rect.tl <= *this && *this <= rect.br;
 		}
 
 		TPoint<Type>& operator+=(const TPoint<Type>& pt)
@@ -238,9 +240,11 @@ namespace chaos
 		}
 		TRect(TPoint<Type> tl, TSize<Type> siz) : tl(tl), br(tl + siz), size(siz) {}
 
+		TRect(Type x, Type y, Type width, Type height) : tl(x, y), br(x + width, y + height), size(width, height) {}
+
 		bool Contain(const TPoint<Type>& pt) const
 		{
-			return tl < pt && pt < br;
+			return tl <= pt && pt <= br;
 		}
 
 		friend TRect<Type> operator+(const TRect<Type>& ret, const TSize<Type> siz)
@@ -315,22 +319,26 @@ namespace chaos
 	{
 	public:
 		Mat();
-		Mat(const size_t width, const size_t height, const size_t depth);
-		Mat(const std::vector<size_t> dims, const int depth);
-		Mat(const MatSize siz, int depth);
-		Mat(const Size siz, int depth);
+		Mat(const size_t width, const size_t height, const MatDepth depth);
+		Mat(const std::vector<size_t> dims, const MatDepth depth);
+		Mat(const MatSize siz, const MatDepth depth);
+		Mat(const Size siz, const MatDepth depth);
 
-		Mat(const size_t width, const size_t height, const size_t depth, void* data);
-		Mat(const std::vector<size_t> dims, const int depth, void* data);
-		Mat(const MatSize siz, const int depth, void* data);
-		Mat(const Size siz, int depth, void* data);
+		Mat(const size_t width, const size_t height, const MatDepth depth, void* data);
+		Mat(const std::vector<size_t> dims, const MatDepth depth, void* data);
+		Mat(const MatSize siz, const MatDepth depth, void* data);
+		Mat(const Size siz, const MatDepth depth, void* data);
+
+		Mat(const Mat& mtx, const Rect& roi);
 
 		Mat(const Mat& mtx);
 		Mat& operator=(const Mat& mtx);
+		Mat operator()(const Rect& roi);
 
 		~Mat();
 
 		void Release();
+		// 等实现roi的获取，再考虑clone怎么实现
 		Mat Clone() const;
 
 		static Mat Zeros(const Size siz, const int depth);
@@ -339,26 +347,73 @@ namespace chaos
 
 
 		CHAOS_EXPORT friend std::ostream& operator<<(std::ostream& stream, const Mat& mtx);
-
+		
 	public:
 		size_t* ref_cnt = nullptr;
 		uchar* data;
+		uchar* data_start; // 在使用数据的时候，的起始指针（roi）
+		uchar* data_end; // 数据终止，迭代的时候用么？
 		MatSize size;
 		MatStep step;
-		size_t depth;
+		MatDepth depth;
+		bool is_submatrix = false; // 是否是子矩阵
 	};
+
+#pragma region Data Depth
+	template<class Type> class DataDepth
+	{
+	public:
+		static constexpr MatDepth depth = DEPTH_UNKNOW;
+	};
+
+	template<> class DataDepth<uchar>
+	{
+	public:
+		static constexpr MatDepth depth = DEPTH_8U;
+	};
+	template<> class DataDepth<char>
+	{
+	public:
+		static constexpr MatDepth depth = DEPTH_8S;
+	};
+	template<> class DataDepth<unsigned short>
+	{
+	public:
+		static constexpr MatDepth depth = DEPTH_16U;
+	};
+	template<> class DataDepth<short>
+	{
+	public:
+		static constexpr MatDepth depth = DEPTH_16S;
+	};
+	template<> class DataDepth<int>
+	{
+	public:
+		static constexpr MatDepth depth = DEPTH_32S;
+	};
+	template<> class DataDepth<float>
+	{
+	public:
+		static constexpr MatDepth depth = DEPTH_32F;
+	};
+	template<> class DataDepth<double>
+	{
+	public:
+		static constexpr MatDepth depth = DEPTH_64F;
+	};
+#pragma endregion
 
 	template<class Type>
 	class TMat : public Mat
 	{
 	public:
 		TMat() : Mat() {}
-
-		TMat(std::vector<size_t>&& dims) : Mat(std::move(dims), sizeof(Type))
+		// 反向查找
+		TMat(std::vector<size_t>&& dims) : Mat((dims), DataDepth<Type>::depth)
 		{
 		}
 
-		TMat(std::vector<size_t>&& dims, Type* data) : Mat(std::move(dims), sizeof(Type), data)
+		TMat(std::vector<size_t>&& dims, Type* data) : Mat((dims), DataDepth<Type>::depth, data)
 		{
 		}
 
@@ -368,7 +423,6 @@ namespace chaos
 			TMatInitializer<Type> initializer(this);
 			return (initializer, value);
 		}
-
 	};
 
 	template<class Type>
@@ -425,7 +479,46 @@ namespace chaos
 		TMatIterator<Type> it;
 	};
 
+	template<class Type>
+	class TMatFormatter
+	{
+	public:
+		TMatFormatter(const Mat& mtx) : mtx(mtx) {}
+		 
+		friend std::ostream& operator << (std::ostream& stream, const TMatFormatter<Type>& formatted)
+		{
+			auto ptr = (Type*)formatted.mtx.data_start;
 
+			std::cout << "[";
+			for (size_t slice = 0; slice < formatted.mtx.step.slice_cnt; slice++)
+			{
+				if (slice % formatted.mtx.size[1] == 0)
+					std::cout << "[";
+				std::cout << "[";
+				for (size_t row = 0; row < formatted.mtx.size[2]; row++)
+				{
+					auto data = ptr + row * formatted.mtx.step[2];
+					for (size_t col = 0; col < formatted.mtx.size[3]; col++)
+					{
+						std::cout << data[col];
+						if (row != formatted.mtx.size[2] - 1 || col != formatted.mtx.size[3] - 1)
+							std::cout << " ";
+					}
+					if (row != formatted.mtx.size[2] - 1) std::cout << std::endl;
+				}
+				std::cout << "]";
+				if (slice % formatted.mtx.size[1] == formatted.mtx.size[1] - 1)
+					std::cout << "]";
+				if (slice != formatted.mtx.step.slice_cnt - 1) std::cout << std::endl;
+			}
+			std::cout << "]";
+			return stream;
+		}
+
+		Mat mtx;
+	};
+
+	
 
 } // namespace chaos
 

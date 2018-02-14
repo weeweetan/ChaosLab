@@ -21,7 +21,8 @@ namespace chaos
 
 	using uchar = unsigned char;
 	using Point = TPoint<int>;
-	using Size = TSize<size_t>;
+	using Size = TSize<int>;
+	using Rect = TRect<int>;
 
 	enum LogSeverity
 	{
@@ -31,15 +32,17 @@ namespace chaos
 		FATAL,
 	};
 
-	enum MatDepthType
+	enum MatDepth
 	{
 		DEPTH_8U,  // unsigned char
-		DEPTH_8S, // char
+		DEPTH_8S, // char 1
 		DEPTH_16U, // unsigned short
-		DEPTH_16S, // short
+		DEPTH_16S, // short 2
 		DEPTH_32S, // int
-		DEPTH_32F, // float
-		DEPTH_64F, // double
+		DEPTH_32F, // float 4
+		DEPTH_64F, // double 8
+
+		DEPTH_UNKNOW = -1,
 	};
 
 	
