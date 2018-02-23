@@ -20,6 +20,7 @@ namespace chaos
 	template<class Type> class TMatInitializer;
 
 	using uchar = unsigned char;
+	using ushort = unsigned short;
 	using Point = TPoint<int>;
 	using Size = TSize<int>;
 	using Rect = TRect<int>;
@@ -45,6 +46,13 @@ namespace chaos
 		DEPTH_UNKNOW = -1,
 	};
 
+	enum MatFormatType
+	{
+		MFT_DEFAULT,
+		MFT_MATLAB,
+		MFT_PYTHON,
+		MFT_CSV,
+	};
 	
 
 } // namespace chaos

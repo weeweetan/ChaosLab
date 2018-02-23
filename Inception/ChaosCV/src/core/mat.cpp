@@ -223,29 +223,213 @@ namespace chaos
 		return mtx;
 	}
 
+
 	std::ostream & operator<<(std::ostream& stream, const Mat& mtx)
 	{
-		switch (mtx.depth)
-		{
-		case DEPTH_8U:
-			return stream << TMatFormatter<uchar>(mtx);
-		case DEPTH_8S:
-			return stream << TMatFormatter<char>(mtx);
-		case DEPTH_16U:
-			return stream << TMatFormatter<unsigned short>(mtx);
-		case DEPTH_16S:
-			return stream << TMatFormatter<short>(mtx);
-		case DEPTH_32S:
-			return stream << TMatFormatter<int>(mtx);
-		case DEPTH_32F:
-			return stream << TMatFormatter<float>(mtx);
-		case DEPTH_64F:
-			return stream << TMatFormatter<double>(mtx);
-		default:
-			return stream;
-		}
+		return stream << MatFormatter::Get(MFT_DEFAULT)->Format(mtx);
 	}
 
 #pragma endregion
 
+#pragma region MatFormatter
+
+	FormattedMat::FormattedMat(std::string pl, std::string el, const Mat& mtx, char br[7])
+	{
+		prologue = pl;
+		epilogue = el;
+		memcpy(braces, br, 7);
+
+		state = STATE_PROLOGUE;
+
+		switch (mtx.depth)
+		{
+		case DEPTH_8U:
+			Convert = std::bind(&FormattedMat::Convert8U, this); break;
+		case DEPTH_8S:
+			Convert = std::bind(&FormattedMat::Convert8S, this); break;
+		case DEPTH_16U:
+			Convert = std::bind(&FormattedMat::Convert16U, this); break;
+		case DEPTH_16S:
+			Convert = std::bind(&FormattedMat::Convert16S, this); break;
+		case DEPTH_32S:
+			Convert = std::bind(&FormattedMat::Convert32S, this); break;
+		case DEPTH_32F:
+			Convert = std::bind(&FormattedMat::Convert32F, this); break;
+		case DEPTH_64F:
+			Convert = std::bind(&FormattedMat::Convert64F, this); break;
+		default:
+			LOG(chaos::FATAL) << "Unknown Depth Type";
+		}
+
+		this->mtx = mtx;
+
+	}
+
+	const std::string FormattedMat::Next()
+	{
+		switch (state)
+		{
+		case STATE_PROLOGUE:
+		{
+			num = 0; channel = 0;
+			state = STATE_CHANNEL_OPEN;
+			return prologue;
+		}
+		case STATE_EPILOGUE:
+		{
+			state = STATE_FINISHED;
+			return epilogue;
+		}
+		case STATE_CHANNEL_OPEN:
+		{
+			state = STATE_ROW_OPEN;
+			row = 0;
+			char brace = braces[BRACE_CHANNEL_OPEN];
+			return std::string(&brace, 1);
+		}
+		case STATE_CHANNEL_CLOSE:
+		{
+			channel++;
+			if (channel == mtx.size[1])
+			{
+				num++;
+				if (num == mtx.size[0])
+				{
+					state = STATE_EPILOGUE;
+				}
+				else
+				{
+					channel = 0;
+					state = STATE_NUM_SEPARATOR;
+				}
+			}
+			else
+			{
+				state = STATE_CHANNEL_SEPARATOR;
+			}
+			char brace = braces[BRACE_CHANNEL_CLOSE];
+			return std::string(&brace, 1);
+		}
+		case STATE_CHANNEL_SEPARATOR:
+		{
+			char brace = braces[BRACE_CHANNEL_SEP];
+			state = STATE_CHANNEL_OPEN;
+			return std::string(&brace, 1) + "\n";
+		}
+		case STATE_NUM_SEPARATOR:
+		{
+			char brace = braces[BRACE_NUM_SEP];
+			state = STATE_CHANNEL_OPEN;
+			return std::string(&brace, 1) + "\n\n";
+		}
+		case STATE_ROW_OPEN:
+		{
+			state = STATE_VALUE;
+			col = 0;
+			char brace = braces[BRACE_ROW_OPEN];
+			if (row == 0)
+				return std::string();
+			else
+				return std::string(&brace, 1);
+		}
+		case STATE_ROW_CLOSE:
+		{
+			char brace = braces[BRACE_ROW_CLOSE];
+			return std::string(&brace, 1);
+			break;
+		}
+		case STATE_VALUE:
+		{
+			Convert();
+			col++;
+			if (col == mtx.size[3])
+				state = STATE_LINE_SEPARATOR;
+			else
+				state = STATE_VALUE_SEPARATOR;
+			return buff;
+		}
+		case STATE_VALUE_SEPARATOR:
+		{
+			state = STATE_VALUE;
+			return ", ";
+		}
+		case STATE_LINE_SEPARATOR:
+		{
+			row++;
+			char brace = braces[BRACE_ROW_SEP];
+			if (row == mtx.size[2])
+			{
+				state = STATE_CHANNEL_CLOSE;
+				return std::string();
+			}
+			else
+			{
+				state = STATE_ROW_OPEN;
+				return std::string(&brace, 1) + "\n";
+			}
+			
+			
+		}
+		default:
+			return std::string();
+		}
+	}
+
+	std::ostream& operator<<(std::ostream& stream, const std::shared_ptr<FormattedMat>& formatted)
+	{
+		stream << formatted->prologue;
+
+		while (formatted->state != FormattedMat::STATE_FINISHED)
+		{
+			stream << formatted->Next();
+		}
+
+		stream << formatted->epilogue;
+		return stream;
+	}
+
+	class DefaultFormatter : public MatFormatter
+	{
+	public:
+		std::shared_ptr<FormattedMat> Format(const Mat& mtx) final
+		{
+			char braces[7] = { '\0', '\0', ';', '[', ']', ',', ';' };
+			return std::shared_ptr<FormattedMat>(new FormattedMat("", "", mtx, &*braces));
+		}
+	};
+
+	//class MatlabFormatter : public MatFormatter
+	//{
+	//public:
+	//	std::shared_ptr<FormattedMat> Format(const Mat& mtx) final
+	//	{
+	//		char braces[7] = { '\0', '\0', ';', '\0', '\0', '\0', '\0' };
+	//		return std::shared_ptr<FormattedMat>(new FormattedMat("", "", mtx, &*braces));
+	//	}
+	//};
+
+	//class PythonFormatter : public MatFormatter
+	//{
+	//public:
+	//	std::shared_ptr<FormattedMat> Format(const Mat& mtx) final
+	//	{
+	//		char braces[7] = { '[', ']', ',', '[', ']', '\n', '\n' };
+	//		return std::shared_ptr<FormattedMat>(new FormattedMat("[", "]", mtx, &*braces));
+	//	}
+	//};
+
+	std::shared_ptr<MatFormatter> MatFormatter::Get(MatFormatType fmt)
+	{
+		switch (fmt)
+		{
+		//case chaos::MFT_MATLAB:
+		//	return std::shared_ptr<MatFormatter>(new MatlabFormatter());
+		//case chaos::MFT_PYTHON:
+		//	return std::shared_ptr<MatFormatter>(new PythonFormatter());
+		//case chaos::MFT_DEFAULT:
+		default:
+			return std::shared_ptr<MatFormatter>(new DefaultFormatter());
+		}
+	}
+#pragma endregion
 }

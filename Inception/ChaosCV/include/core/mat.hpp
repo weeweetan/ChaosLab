@@ -9,6 +9,7 @@
 #include <numeric>
 #include <iomanip>
 #include <typeindex>
+#include <functional>
 
 #ifdef USE_OPENCV
 #include <opencv2\opencv.hpp>
@@ -341,9 +342,23 @@ namespace chaos
 		// 等实现roi的获取，再考虑clone怎么实现
 		Mat Clone() const;
 
-		static Mat Zeros(const Size siz, const int depth);
-		static Mat Ones(const Size siz, const int depth);
-		Mat Diag(int d = 0);
+		template<class Type>
+		Type* GetPtr(int num, int channel, int row, int col)
+		{
+			// 对边界进行判断
+			CHECK(0 <= num && num < size[0]);
+			CHECK(0 <= channel && channel < size[1]);
+			CHECK(0 <= row && row < size[2]);
+			CHECK(0 <= col && col < size[3]);
+
+			auto ptr = (Type*)data_start;
+			ptr += (num * step[0] + channel * step[1] + row * step[2] + col);
+			return ptr;
+		}
+
+		//static Mat Zeros(const Size siz, const int depth);
+		//static Mat Ones(const Size siz, const int depth);
+		//Mat Diag(int d = 0);
 
 
 		CHAOS_EXPORT friend std::ostream& operator<<(std::ostream& stream, const Mat& mtx);
@@ -376,7 +391,7 @@ namespace chaos
 	public:
 		static constexpr MatDepth depth = DEPTH_8S;
 	};
-	template<> class DataDepth<unsigned short>
+	template<> class DataDepth<ushort>
 	{
 	public:
 		static constexpr MatDepth depth = DEPTH_16U;
@@ -408,7 +423,7 @@ namespace chaos
 	{
 	public:
 		TMat() : Mat() {}
-		// 反向查找
+
 		TMat(std::vector<size_t>&& dims) : Mat((dims), DataDepth<Type>::depth)
 		{
 		}
@@ -479,45 +494,58 @@ namespace chaos
 		TMatIterator<Type> it;
 	};
 
-	template<class Type>
-	class TMatFormatter
+
+	class FormattedMat
 	{
 	public:
-		TMatFormatter(const Mat& mtx) : mtx(mtx) {}
-		 
-		friend std::ostream& operator << (std::ostream& stream, const TMatFormatter<Type>& formatted)
+		enum State
 		{
-			auto ptr = (Type*)formatted.mtx.data_start;
+			STATE_PROLOGUE, STATE_EPILOGUE, 
+			STATE_CHANNEL_OPEN, STATE_CHANNEL_CLOSE, 
+			STATE_ROW_OPEN, STATE_ROW_CLOSE, 
+			STATE_VALUE, STATE_FINISHED, STATE_VALUE_SEPARATOR,
+			STATE_LINE_SEPARATOR, STATE_CHANNEL_SEPARATOR, STATE_NUM_SEPARATOR,
+		};
 
-			std::cout << "[";
-			for (size_t slice = 0; slice < formatted.mtx.step.slice_cnt; slice++)
-			{
-				if (slice % formatted.mtx.size[1] == 0)
-					std::cout << "[";
-				std::cout << "[";
-				for (size_t row = 0; row < formatted.mtx.size[2]; row++)
-				{
-					auto data = ptr + row * formatted.mtx.step[2];
-					for (size_t col = 0; col < formatted.mtx.size[3]; col++)
-					{
-						std::cout << data[col];
-						if (row != formatted.mtx.size[2] - 1 || col != formatted.mtx.size[3] - 1)
-							std::cout << " ";
-					}
-					if (row != formatted.mtx.size[2] - 1) std::cout << std::endl;
-				}
-				std::cout << "]";
-				if (slice % formatted.mtx.size[1] == formatted.mtx.size[1] - 1)
-					std::cout << "]";
-				if (slice != formatted.mtx.step.slice_cnt - 1) std::cout << std::endl;
-			}
-			std::cout << "]";
-			return stream;
-		}
+		enum Brace
+		{
+			BRACE_ROW_OPEN, BRACE_ROW_CLOSE, 
+			BRACE_ROW_SEP, BRACE_CHANNEL_OPEN, 
+			BRACE_CHANNEL_CLOSE, BRACE_CHANNEL_SEP, 
+			BRACE_NUM_SEP,
+		};
+
+		FormattedMat(std::string pl, std::string el, const Mat& mtx, char br[7]);
+
+		friend std::ostream& operator<<(std::ostream& stream, const std::shared_ptr<FormattedMat>& formatted);	
+
+		const std::string Next();
 
 		Mat mtx;
+		std::string prologue, epilogue;
+		char braces[7];
+		State state;
+		// NCHW
+		size_t num, channel, row, col; // row = h, col = w
+
+		char buff[32];   // enough for double with precision up to 20
+		std::function<void(void)> Convert;
+		void Convert8U() { sprintf_s(buff, "%3d", (int)mtx.GetPtr<uchar>(num, channel, row, 0)[col]); };
+		void Convert8S() { sprintf_s(buff, "%3d", (int)mtx.GetPtr<char>(num, channel, row, 0)[col]); };
+		void Convert16U() { sprintf_s(buff, "%d", mtx.GetPtr<ushort>(num, channel, row, 0)[col]); };
+		void Convert16S() { sprintf_s(buff, "%d", mtx.GetPtr<short>(num, channel, row, 0)[col]); };
+		void Convert32S() { sprintf_s(buff, "%d", mtx.GetPtr<int>(num, channel, row, 0)[col]); };
+		void Convert32F() { sprintf_s(buff, "%f", mtx.GetPtr<float>(num, channel, row, 0)[col]); };
+		void Convert64F() { sprintf_s(buff, "%lf", mtx.GetPtr<double>(num, channel, row, 0)[col]); };
 	};
 
+	class MatFormatter
+	{
+	public:
+		virtual std::shared_ptr<FormattedMat> Format(const Mat& mtx) = 0;
+
+		static std::shared_ptr<MatFormatter> Get(MatFormatType fmt = MFT_DEFAULT);
+	};
 	
 
 } // namespace chaos
